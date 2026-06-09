@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mis Tareas</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>📋 Mis Tareas</h1>
+  <span class="header-sub">Gestión completa</span>
+</header>
+
+<main class="app-container">
+
+<nav class="tabs" id="tabs" aria-label="Secciones" role="tablist">
+  <button class="tab active" data-tab="add" role="tab" aria-selected="true">Añadir</button>
+  <button class="tab" data-tab="tasks" role="tab" aria-selected="false">Tareas</button>
+  <button class="tab" data-tab="projects" role="tab" aria-selected="false">Proyectos</button>
+</nav>
+
+<div class="tab-content active" id="tab-add">
+  <form class="add-form" id="addForm">
+    <div class="row">
+      <div class="field text">
+        <label for="addText">Nombre</label>
+        <input type="text" id="addText" placeholder="Nueva tarea..." autofocus>
+      </div>
+      <div class="field">
+        <label for="addDate">Fecha límite</label>
+        <input type="datetime-local" id="addDate">
+      </div>
+      <div class="field">
+        <label for="addOffset">Recordatorio</label>
+        <select id="addOffset">
+          <option value="-1">Sin recordatorio</option>
+          <option value="0">Al vencer</option>
+          <option value="30">30 min antes</option>
+          <option value="60">1 hora antes</option>
+          <option value="120">2 horas antes</option>
+          <option value="360">6 horas antes</option>
+          <option value="720">12 horas antes</option>
+          <option value="1440" selected>1 día antes</option>
+          <option value="2880">2 días antes</option>
+          <option value="4320">3 días antes</option>
+          <option value="10080">1 semana antes</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="addRecur">Repetición</label>
+        <select id="addRecur">
+          <option value="">Sin repetición</option>
+          <option value="daily">Diaria</option>
+          <option value="weekly">Semanal</option>
+          <option value="monthly">Mensual</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="addProject">Proyecto</label>
+        <select id="addProject"></select>
+      </div>
+      <button type="submit">Añadir</button>
+    </div>
+  </form>
+</div>
+
+<div class="tab-content" id="tab-tasks">
+  <div class="toolbar" id="toolbar">
+    <button class="pill active" data-filter="all">Todas</button>
+    <button class="pill" data-filter="pending">Pendientes</button>
+    <button class="pill" data-filter="overdue">Vencidas</button>
+    <button class="pill" data-filter="done">Completadas</button>
+    <span class="spacer"></span>
+    <span class="info" id="taskInfo"></span>
+  </div>
+
+  <div class="task-list" id="taskList"></div>
+</div>
+
+<div class="tab-content" id="tab-projects">
+  <div class="projects-panel">
+    <h2>Proyectos</h2>
+    <div class="project-tree" id="projectList"></div>
+    <form class="add-project-form" id="addProjectForm">
+      <input type="text" id="projectInput" placeholder="Nuevo proyecto..." aria-label="Nombre del proyecto">
+      <select id="parentProject" aria-label="Proyecto padre"><option value="">Raíz</option></select>
+      <button type="submit" aria-label="Añadir proyecto">+</button>
+    </form>
+  </div>
+</div>
+
+</main>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="modalCancel">Cancelar</button>
+      <button class="modal-confirm" id="modalConfirm">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="options.js"></script>
+</body>
+</html>

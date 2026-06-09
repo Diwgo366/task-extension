@@ -1,0 +1,7 @@
+{
+  "name": "com.anomalyco.brave_tasks",
+  "description": "Brave Tasks native messaging host",
+  "path": "/usr/local/lib/brave-tasks/brave-tasks.py",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__MSG_@@extension_id__"]
+}

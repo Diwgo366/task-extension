@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Mis Tareas",
+  "version": "1.0.0",
+  "description": "Gestor de tareas pendientes sincronizado entre sesiones de Brave",
+  "permissions": ["storage", "alarms", "notifications"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Mis Tareas",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

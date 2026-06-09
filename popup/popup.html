@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>📋 Tareas</h1>
+      <div class="header-right">
+        <span id="meta"></span>
+        <button type="button" id="openOptions" title="Gestión completa" aria-label="Abrir gestión completa">&#x2699;&#xFE0F;</button>
+      </div>
+    </header>
+
+    <main id="mainContent">
+      <div id="filterBar">
+        <select id="projectFilter" aria-label="Filtrar por proyecto">
+          <option value="">Todos los proyectos</option>
+        </select>
+      </div>
+      <div id="groups"></div>
+    </main>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
