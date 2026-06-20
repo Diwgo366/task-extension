@@ -3,6 +3,7 @@
   "name": "Mis Tareas",
   "version": "1.0.0",
   "description": "Gestor de tareas pendientes sincronizado entre sesiones de Brave",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiGg4EyA0BJHGcNhJaxx6RkuT+gjfhp4DI5mu4rxdxWnG5uFk9x2A7Jnlj0TjySqCGfVJ1FhxK5lUoAT6zIEOtcNgY/IX1ODzkCg2W4KdkLQlg9GQGQBzyR9+GOIahvigRLhkibNSnBbv7aFSB3k0LrbrprK2WohkEfL6iL+btsr68Zj3O5WQO0yA/EhbRUEIRJoncvbJdl898F0O+7sODy2PNPDsEe8lc1iJ9Vw4+DPFZT+cHtaXcp0LF01E4dAVdVWP58hG6qJHiAL7stb7hDOGBTHmY9zjhBrVJEaDHZoH6nsD85H/NBaANnO3ggls0R1aLxQeovXXcM/DHPtA5QIDAQAB",
   "permissions": ["storage", "alarms", "notifications"],
   "action": {
     "default_popup": "popup/popup.html",

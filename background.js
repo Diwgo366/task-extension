@@ -6,7 +6,9 @@ const KEY_THEME = 'brave_theme';
 // ── Time helpers ──
 
 function localInputToUTC(str) {
-  return str ? new Date(str).toISOString() : null;
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function nextDate(recurrence, from) {
@@ -232,6 +234,7 @@ async function renameProject(oldName, newName) {
       }
     });
   });
+  updateBadge();
 }
 
 async function deleteProject(name) {
@@ -248,6 +251,7 @@ async function deleteProject(name) {
       if (t.project === name || (t.project && t.project.startsWith(prefix))) t.project = null;
     });
   });
+  updateBadge();
 }
 
 // ── Reminders ──
