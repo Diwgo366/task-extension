@@ -355,17 +355,28 @@ $('#addForm').addEventListener('submit', async (e) => {
 });
 
 $('#addRecur').addEventListener('change', () => {
-  $('#addDaysContainer').style.display = $('#addRecur').value === 'weekly-days' ? '' : 'none';
+  const show = $('#addRecur').value === 'weekly-days';
+  $('#addDaysContainer').style.display = show ? '' : 'none';
+  if (!show) $('#addDaysContainer').querySelectorAll('.day-check').forEach(cb => cb.checked = false);
 });
 
 $('#taskList').addEventListener('change', (e) => {
   const cb = e.target.closest('.day-check');
-  if (!cb) return;
-  const ed = cb.closest('.inline-editor');
-  if (!ed) return;
-  const id = ed.previousElementSibling?.dataset.id;
-  if (!id) return;
-  editing = id;
+  if (cb) {
+    const ed = cb.closest('.inline-editor');
+    if (!ed) return;
+    const id = ed.previousElementSibling?.dataset.id;
+    if (!id) return;
+    editing = id;
+    return;
+  }
+  const recur = e.target.closest('.edit-recur');
+  if (recur) {
+    const ed = recur.closest('.inline-editor');
+    if (!ed) return;
+    const picker = ed.querySelector('.day-picker');
+    if (picker) picker.style.display = recur.value === 'weekly-days' ? '' : 'none';
+  }
 });
 
 $('#toolbar').addEventListener('click', (e) => {
