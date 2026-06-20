@@ -897,6 +897,59 @@ button {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+/* ── Day Picker ── */
+
+.day-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.day-picker label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.day-cbs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.day-cb {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px;
+  border: 1px solid rgba(var(--border-rgb), 0.5);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+  transition: all var(--transition);
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 500 !important;
+}
+
+.day-cb:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.day-cb:has(input:checked) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.day-cb input {
+  display: none;
+}
+
 /* ── Utility ── */
 
 input[type="date"],

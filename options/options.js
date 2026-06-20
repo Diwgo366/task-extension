@@ -70,9 +70,28 @@ function dueLabel(dateStr) {
   return `📅 ${fmtDateTime(dateStr)}`;
 }
 
-const RECUR = { daily:'Diaria', weekly:'Semanal', monthly:'Mensual' };
+const RECUR = { daily:'Diaria', weekly:'Semanal', 'weekly-days':'Semanal (días)', monthly:'Mensual' };
 const OFFSET = { '-1':'Sin recordatorio', 0:'Al vencer', 30:'30 min', 60:'1 h', 120:'2 h',
   360:'6 h', 720:'12 h', 1440:'1 d', 2880:'2 d', 4320:'3 d', 10080:'1 sem' };
+const DAYS = { 0:'Dom',1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb' };
+
+function daysSelector(selected, prefix) {
+  return Object.entries(DAYS).map(([v, label]) =>
+    `<label class="day-cb"><input type="checkbox" class="day-check" data-p="${prefix}" value="${v}"${(selected||'').split(',').includes(v)?' checked':''}>${label}</label>`
+  ).join('');
+}
+
+function getSelectedDays(container) {
+  return Array.from(container.querySelectorAll('.day-check:checked')).map(cb => cb.value).sort().join(',');
+}
+
+function recurrenceLabel(task) {
+  if (!task.recurrence) return '';
+  if (task.recurrence === 'weekly-days' && task.recurrenceDays) {
+    return task.recurrenceDays.split(',').map(d => DAYS[d]).join(', ');
+  }
+  return RECUR[task.recurrence] || task.recurrence;
+}
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'SYNC_UPDATED') load();
@@ -118,7 +137,8 @@ function renderTaskRow(t, depth) {
     <span class="pt-check${t.done?' done':''}"></span>
     <span class="pt-text${t.done?' done':''}">${esc(t.text)}</span>
     ${due ? `<span class="pt-due">${due}</span>` : ''}
-    ${t.recurrence ? '<span class="pt-recur">↻</span>' : ''}
+    ${t.recurrence === 'weekly-days' && t.recurrenceDays ? `<span class="pt-recur">${t.recurrenceDays.split(',').map(d => DAYS[d]).join(',')}</span>` : ''}
+    ${t.recurrence && t.recurrence !== 'weekly-days' ? '<span class="pt-recur">↻</span>' : ''}
   </div>`;
 }
 
@@ -249,7 +269,7 @@ function renderTasks() {
       <span class="task-text">${esc(t.text)}</span>
       <span class="task-meta">
         ${t.project ? `<span class="mtag project">${esc(t.project)}</span>` : ''}
-        ${t.recurrence ? `<span class="mtag recurrence">${RECUR[t.recurrence]}</span>` : ''}
+        ${t.recurrence ? `<span class="mtag recurrence">${recurrenceLabel(t)}</span>` : ''}
         ${due ? `<span class="mtag ${isOver?'overdue':'due'}">${due}</span>` : ''}
       </span>
       <span class="task-actions">
@@ -287,6 +307,10 @@ function editor(t) {
         ).join('')}
       </select>
     </div>
+    <div class="field wide day-picker" id="${eid}-days" style="${t.recurrence==='weekly-days'?'':'display:none'}">
+      <label>Días</label>
+      <div class="day-cbs">${daysSelector(t.recurrenceDays, eid)}</div>
+    </div>
     <div class="field">
       <label for="${eid}-proj">Proyecto</label>
       <select class="edit-project" id="${eid}-proj">
@@ -317,15 +341,31 @@ $('#addForm').addEventListener('submit', async (e) => {
     reminderOffset: offset === -1 ? null : offset,
     reminder: offset !== -1 && !!$('#addDate').value,
     recurrence: $('#addRecur').value || null,
+    recurrenceDays: $('#addRecur').value === 'weekly-days' ? getSelectedDays($('#addDaysContainer')) : null,
     project: $('#addProject').value || null,
   });
   $('#addText').value = '';
   $('#addDate').value = '';
   $('#addRecur').value = '';
   $('#addProject').value = '';
+  $('#addDaysContainer').style.display = 'none';
   $('#addText').focus();
   load();
   toast('Tarea añadida');
+});
+
+$('#addRecur').addEventListener('change', () => {
+  $('#addDaysContainer').style.display = $('#addRecur').value === 'weekly-days' ? '' : 'none';
+});
+
+$('#taskList').addEventListener('change', (e) => {
+  const cb = e.target.closest('.day-check');
+  if (!cb) return;
+  const ed = cb.closest('.inline-editor');
+  if (!ed) return;
+  const id = ed.previousElementSibling?.dataset.id;
+  if (!id) return;
+  editing = id;
 });
 
 $('#toolbar').addEventListener('click', (e) => {
@@ -344,11 +384,13 @@ $('#taskList').addEventListener('click', async (e) => {
     if (!item || !item.dataset.id) return;
     const off = parseInt(ed.querySelector('.edit-offset').value);
     const due = ed.querySelector('.edit-date').value || null;
+    const recurVal = ed.querySelector('.edit-recur').value;
     await send({type:'UPDATE_TASK', id: item.dataset.id, changes: {
       text: ed.querySelector('.edit-text').value.trim(),
       dueDate: due,
       reminderOffset: off === -1 ? null : off,
-      recurrence: ed.querySelector('.edit-recur').value || null,
+      recurrence: recurVal || null,
+      recurrenceDays: recurVal === 'weekly-days' ? getSelectedDays(ed) : null,
       project: ed.querySelector('.edit-project').value || null,
       reminder: off !== -1 && !!due,
     }});

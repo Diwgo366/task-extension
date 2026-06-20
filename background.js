@@ -11,11 +11,31 @@ function localInputToUTC(str) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function nextDate(recurrence, from) {
+function nextDate(recurrence, from, recurrenceDays) {
   const d = new Date(from);
-  if (recurrence === 'daily') d.setUTCDate(d.getUTCDate() + 1);
-  if (recurrence === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
-  if (recurrence === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+  if (recurrence === 'daily') {
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString();
+  }
+  if (recurrence === 'weekly') {
+    d.setUTCDate(d.getUTCDate() + 7);
+    return d.toISOString();
+  }
+  if (recurrence === 'weekly-days' && recurrenceDays) {
+    const days = recurrenceDays.split(',').map(Number).sort((a, b) => a - b);
+    const currentDay = d.getUTCDay();
+    const nextDay = days.find(day => day > currentDay);
+    if (nextDay === undefined) {
+      d.setUTCDate(d.getUTCDate() + (7 - currentDay + days[0]));
+    } else {
+      d.setUTCDate(d.getUTCDate() + (nextDay - currentDay));
+    }
+    return d.toISOString();
+  }
+  if (recurrence === 'monthly') {
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    return d.toISOString();
+  }
   return d.toISOString();
 }
 
@@ -150,6 +170,7 @@ async function addTask(text, opts) {
       reminder: opts.reminder !== undefined ? opts.reminder : !!opts.dueDate,
       reminderOffset: opts.reminderOffset !== undefined ? opts.reminderOffset : (opts.dueDate ? 1440 : null),
       recurrence: opts.recurrence || null,
+      recurrenceDays: opts.recurrenceDays || null,
       project: opts.project || null,
     });
   });
@@ -179,10 +200,11 @@ async function toggleTask(id) {
       tasks.unshift({
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         text: task.text, done: false, createdAt: Date.now(),
-        dueDate: nextDate(task.recurrence, task.dueDate),
+        dueDate: nextDate(task.recurrence, task.dueDate, task.recurrenceDays),
         reminder: task.reminder,
         reminderOffset: task.reminderOffset,
         recurrence: task.recurrence,
+        recurrenceDays: task.recurrenceDays || null,
         project: task.project,
       });
     }
