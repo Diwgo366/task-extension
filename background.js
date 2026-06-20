@@ -3,47 +3,99 @@ const KEY_PROJECTS = 'brave_projects';
 const KEY_NOTIFIED = 'brave_tasks_notified';
 const KEY_THEME = 'brave_theme';
 
-function toLocalISO(d) {
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+// ── Time helpers ──
+
+function localInputToUTC(str) {
+  return str ? new Date(str).toISOString() : null;
 }
 
 function nextDate(recurrence, from) {
   const d = new Date(from);
-  if (recurrence === 'daily') d.setDate(d.getDate() + 1);
-  if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
-  if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
-  return toLocalISO(d);
+  if (recurrence === 'daily') d.setUTCDate(d.getUTCDate() + 1);
+  if (recurrence === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
+  if (recurrence === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.toISOString();
 }
 
+// ── Storage helpers with error handling ──
+
+async function storageSyncGet(key) {
+  try {
+    return await chrome.storage.sync.get(key);
+  } catch (e) {
+    console.error('[Mis Tareas] Error reading from sync:', e);
+    return {};
+  }
+}
+
+async function storageSyncSet(obj) {
+  try {
+    await chrome.storage.sync.set(obj);
+  } catch (e) {
+    console.error('[Mis Tareas] Error writing to sync:', e);
+    throw e;
+  }
+}
+
+async function storageLocalGet(key) {
+  try {
+    return await chrome.storage.local.get(key);
+  } catch (e) {
+    console.error('[Mis Tareas] Error reading from local:', e);
+    return {};
+  }
+}
+
+async function storageLocalSet(obj) {
+  try {
+    await chrome.storage.local.set(obj);
+  } catch (e) {
+    console.error('[Mis Tareas] Error writing to local:', e);
+    throw e;
+  }
+}
+
+// ── Badge ──
+
+async function updateBadge() {
+  try {
+    const tasks = await loadTasks();
+    const pending = tasks.filter(t => !t.done).length;
+    chrome.action.setBadgeText({ text: pending > 0 ? String(pending) : '' });
+    chrome.action.setBadgeBackgroundColor({ color: '#4a9e4f' });
+  } catch (e) {
+    console.error('[Mis Tareas] updateBadge error:', e);
+  }
+}
+
+// ── Data access ──
+
 async function loadTasks() {
-  const r = await chrome.storage.sync.get(KEY_TASKS);
+  const r = await storageSyncGet(KEY_TASKS);
   return r[KEY_TASKS] || [];
 }
 
 async function saveTasks(tasks) {
-  await chrome.storage.sync.set({ [KEY_TASKS]: tasks });
-  const pending = tasks.filter(t => !t.done).length;
-  chrome.action.setBadgeText({ text: pending > 0 ? String(pending) : '' });
-  chrome.action.setBadgeBackgroundColor({ color: '#4a9e4f' });
+  await storageSyncSet({ [KEY_TASKS]: tasks });
+  updateBadge();
 }
 
 async function loadProjects() {
-  const r = await chrome.storage.sync.get(KEY_PROJECTS);
+  const r = await storageSyncGet(KEY_PROJECTS);
   return r[KEY_PROJECTS] || [];
 }
 
 async function saveProjects(projects) {
-  await chrome.storage.sync.set({ [KEY_PROJECTS]: projects });
+  await storageSyncSet({ [KEY_PROJECTS]: projects });
 }
 
 async function loadNotified() {
-  const r = await chrome.storage.local.get(KEY_NOTIFIED);
+  const r = await storageLocalGet(KEY_NOTIFIED);
   return r[KEY_NOTIFIED] || [];
 }
 
 async function saveNotified(list) {
-  await chrome.storage.local.set({ [KEY_NOTIFIED]: list });
+  await storageLocalSet({ [KEY_NOTIFIED]: list });
 }
 
 // ── Theme ──
@@ -60,12 +112,12 @@ function setThemeIcon(theme) {
 }
 
 async function loadTheme() {
-  const r = await chrome.storage.local.get(KEY_THEME);
+  const r = await storageLocalGet(KEY_THEME);
   setThemeIcon(r[KEY_THEME] || 'light');
 }
 
 async function saveTheme(theme) {
-  await chrome.storage.local.set({ [KEY_THEME]: theme });
+  await storageLocalSet({ [KEY_THEME]: theme });
   setThemeIcon(theme);
 }
 
@@ -76,7 +128,7 @@ async function addTask(text, opts) {
   tasks.unshift({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     text, done: false, createdAt: Date.now(),
-    dueDate: opts.dueDate || null,
+    dueDate: localInputToUTC(opts.dueDate),
     reminder: opts.reminder !== undefined ? opts.reminder : !!opts.dueDate,
     reminderOffset: opts.reminderOffset !== undefined ? opts.reminderOffset : (opts.dueDate ? 1440 : null),
     recurrence: opts.recurrence || null,
@@ -88,7 +140,12 @@ async function addTask(text, opts) {
 async function updateTask(id, changes) {
   const tasks = await loadTasks();
   const task = tasks.find(t => t.id === id);
-  if (task) Object.assign(task, changes);
+  if (task) {
+    if (changes.dueDate !== undefined) {
+      changes.dueDate = localInputToUTC(changes.dueDate);
+    }
+    Object.assign(task, changes);
+  }
   await saveTasks(tasks);
 }
 
@@ -99,26 +156,19 @@ async function toggleTask(id) {
 
   task.done = !task.done;
 
-  if (!task.done || !task.recurrence || !task.dueDate) {
-    await saveTasks(tasks);
-    return;
+  if (task.done && task.recurrence && task.dueDate) {
+    tasks.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      text: task.text, done: false, createdAt: Date.now(),
+      dueDate: nextDate(task.recurrence, task.dueDate),
+      reminder: task.reminder,
+      reminderOffset: task.reminderOffset,
+      recurrence: task.recurrence,
+      project: task.project,
+    });
   }
 
-  // Phase 1: save the toggled task as done
   await saveTasks(tasks);
-
-  // Phase 2: load fresh and add the next occurrence
-  const fresh = await loadTasks();
-  fresh.unshift({
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    text: task.text, done: false, createdAt: Date.now(),
-    dueDate: nextDate(task.recurrence, task.dueDate),
-    reminder: task.reminder,
-    reminderOffset: task.reminderOffset,
-    recurrence: task.recurrence,
-    project: task.project,
-  });
-  await saveTasks(fresh);
 }
 
 async function deleteTask(id) {
@@ -131,6 +181,8 @@ async function deleteDone() {
   await saveTasks(tasks.filter(t => !t.done));
 }
 
+// ── Projects ──
+
 async function addProject(name) {
   const projects = await loadProjects();
   if (!projects.includes(name)) {
@@ -140,9 +192,9 @@ async function addProject(name) {
 }
 
 async function renameProject(oldName, newName) {
+  let changed = false;
   const [projects, tasks] = await Promise.all([loadProjects(), loadTasks()]);
   const prefix = oldName + '/';
-  let changed = false;
   for (let i = 0; i < projects.length; i++) {
     if (projects[i] === oldName || projects[i].startsWith(prefix)) {
       projects[i] = projects[i] === oldName ? newName : newName + projects[i].slice(prefix.length - 1);
@@ -168,6 +220,8 @@ async function deleteProject(name) {
   });
   await Promise.all([saveProjects(filtered), saveTasks(tasks)]);
 }
+
+// ── Reminders ──
 
 async function checkReminders() {
   const tasks = await loadTasks();
@@ -202,7 +256,11 @@ async function checkReminders() {
     notified.push(task.id);
     changed = true;
   }
-  if (changed) await saveNotified(notified);
+
+  if (changed) {
+    if (notified.length > 500) notified = notified.slice(-500);
+    await saveNotified(notified);
+  }
 }
 
 // ── Alarms ──
@@ -219,6 +277,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     const tasks = await loadTasks();
     const old = tasks.filter(t => t.done && Date.now() - t.createdAt > 7 * 86400000);
     if (old.length) await saveTasks(tasks.filter(t => !old.includes(t)));
+
+    const notified = await loadNotified();
+    const validIds = new Set(tasks.map(t => t.id));
+    const cleaned = notified.filter(id => validIds.has(id));
+    if (cleaned.length !== notified.length) {
+      await saveNotified(cleaned);
+    }
   }
 });
 
@@ -230,6 +295,14 @@ chrome.notifications.onButtonClicked.addListener(async (id) => {
 chrome.notifications.onClicked.addListener((id) => {
   chrome.notifications.clear(id);
   chrome.runtime.openOptionsPage();
+});
+
+// ── Sync from other devices ──
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && (changes[KEY_TASKS] || changes[KEY_PROJECTS])) {
+    updateBadge();
+  }
 });
 
 // ── Message handler ──
@@ -249,5 +322,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     SET_THEME: () => saveTheme(msg.theme),
   };
   const fn = handlers[msg.type];
-  if (fn) { fn().then(sendResponse); return true; }
+  if (fn) {
+    fn().then(sendResponse).catch(e => {
+      console.error('[Mis Tareas] Handler error:', msg.type, e);
+      sendResponse({ error: e.message });
+    });
+    return true;
+  }
+  console.warn('[Mis Tareas] Unknown message type:', msg.type);
+  sendResponse({ error: 'Unknown message type' });
 });
+
+updateBadge();

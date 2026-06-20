@@ -53,6 +53,13 @@ function fmtDateTime(dateStr) {
   return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+function toLocalInputDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function dueLabel(dateStr) {
   const d = daysUntil(dateStr);
   if (d === null) return '';
@@ -252,7 +259,7 @@ function editor(t) {
     </div>
     <div class="field">
       <label for="${eid}-date">Fecha límite</label>
-      <input type="datetime-local" class="edit-date" id="${eid}-date" value="${t.dueDate||''}">
+      <input type="datetime-local" class="edit-date" id="${eid}-date" value="${toLocalInputDate(t.dueDate)}">
     </div>
     <div class="field">
       <label for="${eid}-offset">Recordatorio</label>
