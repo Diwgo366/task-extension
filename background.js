@@ -68,6 +68,22 @@ async function updateBadge() {
   }
 }
 
+// ── Optimistic concurrency ──
+
+async function saveWithRetry(key, loadFn, modifyFn, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const data = await loadFn();
+    modifyFn(data);
+    try {
+      await storageSyncSet({ [key]: data });
+      return;
+    } catch (e) {
+      if (attempt === maxRetries - 1) throw e;
+      console.warn(`[Mis Tareas] Retry ${attempt + 1} for ${key}:`, e.message);
+    }
+  }
+}
+
 // ── Data access ──
 
 async function loadTasks() {
@@ -124,101 +140,114 @@ async function saveTheme(theme) {
 // ── Tasks ──
 
 async function addTask(text, opts) {
-  const tasks = await loadTasks();
-  tasks.unshift({
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    text, done: false, createdAt: Date.now(),
-    dueDate: localInputToUTC(opts.dueDate),
-    reminder: opts.reminder !== undefined ? opts.reminder : !!opts.dueDate,
-    reminderOffset: opts.reminderOffset !== undefined ? opts.reminderOffset : (opts.dueDate ? 1440 : null),
-    recurrence: opts.recurrence || null,
-    project: opts.project || null,
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    tasks.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      text, done: false, createdAt: Date.now(),
+      dueDate: localInputToUTC(opts.dueDate),
+      reminder: opts.reminder !== undefined ? opts.reminder : !!opts.dueDate,
+      reminderOffset: opts.reminderOffset !== undefined ? opts.reminderOffset : (opts.dueDate ? 1440 : null),
+      recurrence: opts.recurrence || null,
+      project: opts.project || null,
+    });
   });
-  await saveTasks(tasks);
+  updateBadge();
 }
 
 async function updateTask(id, changes) {
-  const tasks = await loadTasks();
-  const task = tasks.find(t => t.id === id);
-  if (task) {
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
     if (changes.dueDate !== undefined) {
       changes.dueDate = localInputToUTC(changes.dueDate);
     }
     Object.assign(task, changes);
-  }
-  await saveTasks(tasks);
+  });
+  updateBadge();
 }
 
 async function toggleTask(id) {
-  const tasks = await loadTasks();
-  const task = tasks.find(t => t.id === id);
-  if (!task) return;
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
 
-  task.done = !task.done;
+    task.done = !task.done;
 
-  if (task.done && task.recurrence && task.dueDate) {
-    tasks.unshift({
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      text: task.text, done: false, createdAt: Date.now(),
-      dueDate: nextDate(task.recurrence, task.dueDate),
-      reminder: task.reminder,
-      reminderOffset: task.reminderOffset,
-      recurrence: task.recurrence,
-      project: task.project,
-    });
-  }
-
-  await saveTasks(tasks);
+    if (task.done && task.recurrence && task.dueDate) {
+      tasks.unshift({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        text: task.text, done: false, createdAt: Date.now(),
+        dueDate: nextDate(task.recurrence, task.dueDate),
+        reminder: task.reminder,
+        reminderOffset: task.reminderOffset,
+        recurrence: task.recurrence,
+        project: task.project,
+      });
+    }
+  });
+  updateBadge();
 }
 
 async function deleteTask(id) {
-  const tasks = await loadTasks();
-  await saveTasks(tasks.filter(t => t.id !== id));
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    const idx = tasks.findIndex(t => t.id === id);
+    if (idx !== -1) tasks.splice(idx, 1);
+  });
+  updateBadge();
 }
 
 async function deleteDone() {
-  const tasks = await loadTasks();
-  await saveTasks(tasks.filter(t => !t.done));
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    for (let i = tasks.length - 1; i >= 0; i--) {
+      if (tasks[i].done) tasks.splice(i, 1);
+    }
+  });
+  updateBadge();
 }
 
 // ── Projects ──
 
 async function addProject(name) {
-  const projects = await loadProjects();
-  if (!projects.includes(name)) {
-    projects.push(name);
-    await saveProjects(projects);
-  }
+  await saveWithRetry(KEY_PROJECTS, loadProjects, (projects) => {
+    if (!projects.includes(name)) projects.push(name);
+  });
 }
 
 async function renameProject(oldName, newName) {
-  let changed = false;
-  const [projects, tasks] = await Promise.all([loadProjects(), loadTasks()]);
   const prefix = oldName + '/';
-  for (let i = 0; i < projects.length; i++) {
-    if (projects[i] === oldName || projects[i].startsWith(prefix)) {
-      projects[i] = projects[i] === oldName ? newName : newName + projects[i].slice(prefix.length - 1);
-      changed = true;
-    }
-  }
-  tasks.forEach(t => {
-    if (t.project === oldName) { t.project = newName; changed = true; }
-    else if (t.project && t.project.startsWith(prefix)) {
-      t.project = newName + '/' + t.project.slice(prefix.length);
-      changed = true;
+
+  await saveWithRetry(KEY_PROJECTS, loadProjects, (projects) => {
+    for (let i = 0; i < projects.length; i++) {
+      if (projects[i] === oldName || projects[i].startsWith(prefix)) {
+        projects[i] = projects[i] === oldName ? newName : newName + projects[i].slice(prefix.length - 1);
+      }
     }
   });
-  if (changed) await Promise.all([saveProjects(projects), saveTasks(tasks)]);
+
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    tasks.forEach(t => {
+      if (t.project === oldName) { t.project = newName; }
+      else if (t.project && t.project.startsWith(prefix)) {
+        t.project = newName + '/' + t.project.slice(prefix.length);
+      }
+    });
+  });
 }
 
 async function deleteProject(name) {
-  const [projects, tasks] = await Promise.all([loadProjects(), loadTasks()]);
   const prefix = name + '/';
-  const filtered = projects.filter(p => p !== name && !p.startsWith(prefix));
-  tasks.forEach(t => {
-    if (t.project === name || (t.project && t.project.startsWith(prefix))) t.project = null;
+
+  await saveWithRetry(KEY_PROJECTS, loadProjects, (projects) => {
+    const filtered = projects.filter(p => p !== name && !p.startsWith(prefix));
+    projects.length = 0;
+    projects.push(...filtered);
   });
-  await Promise.all([saveProjects(filtered), saveTasks(tasks)]);
+
+  await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    tasks.forEach(t => {
+      if (t.project === name || (t.project && t.project.startsWith(prefix))) t.project = null;
+    });
+  });
 }
 
 // ── Reminders ──
@@ -302,6 +331,8 @@ chrome.notifications.onClicked.addListener((id) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && (changes[KEY_TASKS] || changes[KEY_PROJECTS])) {
     updateBadge();
+    // Notify open views (options/popup) to refresh data when sync changes arrive from other devices
+    chrome.runtime.sendMessage({ type: 'SYNC_UPDATED' }).catch(() => {});
   }
 });
 

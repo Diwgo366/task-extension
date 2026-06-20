@@ -49,11 +49,19 @@ function populateProjectFilter() {
   sel.value = cur;
 }
 
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'SYNC_UPDATED') load();
+});
+
 async function load() {
   const r = await Promise.all([
     send({ type: 'GET_TASKS' }),
     send({ type: 'GET_PROJECTS' }),
   ]);
+  if (r[0]?.error || r[1]?.error) {
+    document.getElementById('meta').textContent = '⚠️ Error de sync';
+    return;
+  }
   tasks = r[0];
   projects = r[1];
   populateProjectFilter();

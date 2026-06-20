@@ -74,10 +74,20 @@ const RECUR = { daily:'Diaria', weekly:'Semanal', monthly:'Mensual' };
 const OFFSET = { '-1':'Sin recordatorio', 0:'Al vencer', 30:'30 min', 60:'1 h', 120:'2 h',
   360:'6 h', 720:'12 h', 1440:'1 d', 2880:'2 d', 4320:'3 d', 10080:'1 sem' };
 
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'SYNC_UPDATED') load();
+});
+
 async function load() {
-  [tasks, projects] = await Promise.all([
+  const [t, p] = await Promise.all([
     send({type:'GET_TASKS'}), send({type:'GET_PROJECTS'}),
   ]);
+  if (t?.error || p?.error) {
+    toast('Error de sincronización: ' + (t?.error || p?.error));
+    return;
+  }
+  tasks = t;
+  projects = p;
   renderProjects();
   renderTasks();
   populateProjectSelect();
