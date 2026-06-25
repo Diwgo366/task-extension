@@ -50,14 +50,14 @@ function fmtDateTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   const p = n => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}`;
 }
 
 function toLocalInputDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
 }
 
 function dueLabel(dateStr) {
@@ -70,9 +70,7 @@ function dueLabel(dateStr) {
   return `📅 ${fmtDateTime(dateStr)}`;
 }
 
-const RECUR = { daily:'Diaria', weekly:'Semanal', 'weekly-days':'Semanal (días)', monthly:'Mensual' };
-const OFFSET = { '-1':'Sin recordatorio', 0:'Al vencer', 30:'30 min', 60:'1 h', 120:'2 h',
-  360:'6 h', 720:'12 h', 1440:'1 d', 2880:'2 d', 4320:'3 d', 10080:'1 sem' };
+const RECUR = { daily:'Diaria', 'weekly-days':'Semanal', monthly:'Mensual' };
 const DAYS = { 0:'Dom',1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb' };
 
 function daysSelector(selected, prefix) {
@@ -138,7 +136,7 @@ function renderTaskRow(t, depth) {
     <span class="pt-text${t.done?' done':''}">${esc(t.text)}</span>
     ${due ? `<span class="pt-due">${due}</span>` : ''}
     ${t.recurrence === 'weekly-days' && t.recurrenceDays ? `<span class="pt-recur">${t.recurrenceDays.split(',').map(d => DAYS[d]).join(',')}</span>` : ''}
-    ${t.recurrence && t.recurrence !== 'weekly-days' ? '<span class="pt-recur">↻</span>' : ''}
+    ${t.recurrence ? '<span class="pt-recur">↻</span>' : ''}
   </div>`;
 }
 
@@ -289,14 +287,7 @@ function editor(t) {
     </div>
     <div class="field">
       <label for="${eid}-date">Fecha límite</label>
-      <input type="datetime-local" class="edit-date" id="${eid}-date" value="${toLocalInputDate(t.dueDate)}">
-    </div>
-    <div class="field">
-      <label for="${eid}-offset">Recordatorio</label>
-      <select class="edit-offset" id="${eid}-offset">${Object.entries(OFFSET).map(([v,l]) => {
-        const sel = !t.reminder ? v === '-1' : (t.reminderOffset??1440)==v;
-        return `<option value="${v}"${sel?' selected':''}>${l}</option>`;
-      }).join('')}</select>
+      <input type="date" class="edit-date" id="${eid}-date" value="${toLocalInputDate(t.dueDate)}">
     </div>
     <div class="field">
       <label for="${eid}-recur">Repetición</label>
@@ -307,7 +298,7 @@ function editor(t) {
         ).join('')}
       </select>
     </div>
-    <div class="field wide day-picker" id="${eid}-days" style="${t.recurrence==='weekly-days'?'':'display:none'}">
+    <div class="field wide day-picker${t.recurrence==='weekly-days'?'':' hidden'}" id="${eid}-days">
       <label>Días</label>
       <div class="day-cbs">${daysSelector(t.recurrenceDays, eid)}</div>
     </div>
@@ -335,30 +326,33 @@ $('#addForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('#addText').value.trim();
   if (!text) return;
-  const offset = parseInt($('#addOffset').value);
+  const recurVal = $('#addRecur').value || null;
   await send({type:'ADD_TASK', text,
     dueDate: $('#addDate').value || null,
-    reminderOffset: offset === -1 ? null : offset,
-    reminder: offset !== -1 && !!$('#addDate').value,
-    recurrence: $('#addRecur').value || null,
-    recurrenceDays: $('#addRecur').value === 'weekly-days' ? getSelectedDays($('#addDaysContainer')) : null,
+    recurrence: recurVal,
+    recurrenceDays: recurVal === 'weekly-days' ? getSelectedDays($('#addDaysContainer')) : null,
     project: $('#addProject').value || null,
   });
   $('#addText').value = '';
   $('#addDate').value = '';
   $('#addRecur').value = '';
   $('#addProject').value = '';
-  $('#addDaysContainer').style.display = 'none';
+  $('#dateField').classList.remove('hidden');
+  $('#addDaysContainer').querySelectorAll('.day-check').forEach(cb => cb.checked = false);
+  $('#addDaysContainer').classList.add('hidden');
   $('#addText').focus();
   load();
   toast('Tarea añadida');
 });
 
 $('#addRecur').addEventListener('change', () => {
-  const show = $('#addRecur').value === 'weekly-days';
-  $('#addDaysContainer').style.display = show ? '' : 'none';
-  if (!show) $('#addDaysContainer').querySelectorAll('.day-check').forEach(cb => cb.checked = false);
+  const val = $('#addRecur').value;
+  const isWeeklyDays = val === 'weekly-days';
+  $('#dateField').classList.toggle('hidden', !!val);
+  $('#addDaysContainer').classList.toggle('hidden', !isWeeklyDays);
+  if (!isWeeklyDays) $('#addDaysContainer').querySelectorAll('.day-check').forEach(cb => cb.checked = false);
 });
+$('#addRecur').dispatchEvent(new Event('change'));
 
 $('#taskList').addEventListener('change', (e) => {
   const cb = e.target.closest('.day-check');
@@ -375,7 +369,12 @@ $('#taskList').addEventListener('change', (e) => {
     const ed = recur.closest('.inline-editor');
     if (!ed) return;
     const picker = ed.querySelector('.day-picker');
-    if (picker) picker.style.display = recur.value === 'weekly-days' ? '' : 'none';
+    if (picker) {
+      picker.classList.toggle('hidden', recur.value !== 'weekly-days');
+      if (recur.value !== 'weekly-days') {
+        picker.querySelectorAll('.day-check').forEach(cb => cb.checked = false);
+      }
+    }
   }
 });
 
@@ -393,17 +392,14 @@ $('#taskList').addEventListener('click', async (e) => {
     if (!ed) return;
     const item = ed.previousElementSibling;
     if (!item || !item.dataset.id) return;
-    const off = parseInt(ed.querySelector('.edit-offset').value);
     const due = ed.querySelector('.edit-date').value || null;
     const recurVal = ed.querySelector('.edit-recur').value;
     await send({type:'UPDATE_TASK', id: item.dataset.id, changes: {
       text: ed.querySelector('.edit-text').value.trim(),
       dueDate: due,
-      reminderOffset: off === -1 ? null : off,
       recurrence: recurVal || null,
       recurrenceDays: recurVal === 'weekly-days' ? getSelectedDays(ed) : null,
       project: ed.querySelector('.edit-project').value || null,
-      reminder: off !== -1 && !!due,
     }});
     editing = null;
     load();

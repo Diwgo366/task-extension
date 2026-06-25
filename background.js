@@ -1,6 +1,5 @@
 const KEY_TASKS = 'brave_tasks';
 const KEY_PROJECTS = 'brave_projects';
-const KEY_NOTIFIED = 'brave_tasks_notified';
 const KEY_THEME = 'brave_theme';
 
 // ── Time helpers ──
@@ -21,7 +20,11 @@ function nextDate(recurrence, from, recurrenceDays) {
     d.setUTCDate(d.getUTCDate() + 7);
     return d.toISOString();
   }
-  if (recurrence === 'weekly-days' && recurrenceDays) {
+  if (recurrence === 'weekly-days') {
+    if (!recurrenceDays) {
+      d.setUTCDate(d.getUTCDate() + 7);
+      return d.toISOString();
+    }
     const days = recurrenceDays.split(',').map(Number).sort((a, b) => a - b);
     const currentDay = d.getUTCDay();
     const nextDay = days.find(day => day > currentDay);
@@ -123,19 +126,6 @@ async function loadProjects() {
   return r[KEY_PROJECTS] || [];
 }
 
-async function saveProjects(projects) {
-  await storageSyncSet({ [KEY_PROJECTS]: projects });
-}
-
-async function loadNotified() {
-  const r = await storageLocalGet(KEY_NOTIFIED);
-  return r[KEY_NOTIFIED] || [];
-}
-
-async function saveNotified(list) {
-  await storageLocalSet({ [KEY_NOTIFIED]: list });
-}
-
 // ── Theme ──
 
 function setThemeIcon(theme) {
@@ -163,12 +153,23 @@ async function saveTheme(theme) {
 
 async function addTask(text, opts) {
   await saveWithRetry(KEY_TASKS, loadTasks, (tasks) => {
+    let dueDate = localInputToUTC(opts.dueDate);
+    if (!dueDate && opts.recurrence) {
+      const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
+      dueDate = todayStart;
+      let maxIters = 53;
+      do {
+        const prev = dueDate;
+        dueDate = nextDate(opts.recurrence, dueDate, opts.recurrenceDays);
+        if (dueDate === prev) break;
+        maxIters--;
+        if (maxIters <= 0) break;
+      } while (dueDate <= todayStart);
+    }
     tasks.unshift({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       text, done: false, createdAt: Date.now(),
-      dueDate: localInputToUTC(opts.dueDate),
-      reminder: opts.reminder !== undefined ? opts.reminder : !!opts.dueDate,
-      reminderOffset: opts.reminderOffset !== undefined ? opts.reminderOffset : (opts.dueDate ? 1440 : null),
+      dueDate,
       recurrence: opts.recurrence || null,
       recurrenceDays: opts.recurrenceDays || null,
       project: opts.project || null,
@@ -196,13 +197,22 @@ async function toggleTask(id) {
 
     task.done = !task.done;
 
-    if (task.done && task.recurrence && task.dueDate) {
+    if (task.done && task.recurrence) {
+      const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
+      let newDueDate = task.dueDate || todayStart;
+      let maxIters = 53;
+      do {
+        const prev = newDueDate;
+        newDueDate = nextDate(task.recurrence, newDueDate, task.recurrenceDays);
+        if (newDueDate === prev) break;
+        maxIters--;
+        if (maxIters <= 0) break;
+      } while (newDueDate <= todayStart);
+
       tasks.unshift({
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         text: task.text, done: false, createdAt: Date.now(),
-        dueDate: nextDate(task.recurrence, task.dueDate, task.recurrenceDays),
-        reminder: task.reminder,
-        reminderOffset: task.reminderOffset,
+        dueDate: newDueDate,
         recurrence: task.recurrence,
         recurrenceDays: task.recurrenceDays || null,
         project: task.project,
@@ -276,80 +286,19 @@ async function deleteProject(name) {
   updateBadge();
 }
 
-// ── Reminders ──
-
-async function checkReminders() {
-  const tasks = await loadTasks();
-  let notified = await loadNotified();
-  const now = Date.now();
-  let changed = false;
-
-  for (const task of tasks) {
-    if (task.done || !task.dueDate || !task.reminder) continue;
-    if (notified.includes(task.id)) continue;
-
-    const due = new Date(task.dueDate).getTime();
-    const remindAt = due - (task.reminderOffset ?? 1440) * 60000;
-    if (now < remindAt) continue;
-
-    const daysLeft = Math.ceil((due - now) / 86400000);
-    const title = daysLeft < 0 ? '🕐 Vencida' : daysLeft === 0 ? '⏰ Vence hoy' : '📅 Recordatorio';
-    const dt = new Date(task.dueDate);
-    const p = n => String(n).padStart(2,'0');
-    const dueStr = `${p(dt.getDate())}/${p(dt.getMonth()+1)} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
-    let message = `"${task.text}"`;
-    if (daysLeft < 0) message += ` venció el ${dueStr}`;
-    else if (daysLeft > 0) message += ` — ${daysLeft}d restantes (${dueStr})`;
-    if (task.project) message += ` [${task.project}]`;
-
-    chrome.notifications.create(task.id, {
-      type: 'basic', iconUrl: 'icons/icon128.png',
-      title, message, priority: 2,
-      buttons: [{ title: 'Completada' }],
-    });
-
-    notified.push(task.id);
-    changed = true;
-  }
-
-  if (changed) {
-    if (notified.length > 500) notified = notified.slice(-500);
-    await saveNotified(notified);
-  }
-}
-
 // ── Alarms ──
 
 chrome.runtime.onInstalled.addListener(() => {
   loadTheme();
-  chrome.alarms.create('reminderCheck', { periodInMinutes: 1 });
   chrome.alarms.create('cleanup', { periodInMinutes: 1440 });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'reminderCheck') await checkReminders();
   if (alarm.name === 'cleanup') {
     const tasks = await loadTasks();
     const old = tasks.filter(t => t.done && Date.now() - t.createdAt > 7 * 86400000);
     if (old.length) await saveTasks(tasks.filter(t => !old.includes(t)));
-
-    const notified = await loadNotified();
-    const validIds = new Set(tasks.map(t => t.id));
-    const cleaned = notified.filter(id => validIds.has(id));
-    if (cleaned.length !== notified.length) {
-      await saveNotified(cleaned);
-    }
   }
-});
-
-chrome.notifications.onButtonClicked.addListener(async (id) => {
-  await toggleTask(id);
-  chrome.notifications.clear(id);
-});
-
-chrome.notifications.onClicked.addListener((id) => {
-  chrome.notifications.clear(id);
-  chrome.runtime.openOptionsPage();
 });
 
 // ── Sync from other devices ──

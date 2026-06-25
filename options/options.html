@@ -28,33 +28,16 @@
         <label for="addText">Nombre</label>
         <input type="text" id="addText" placeholder="Nueva tarea..." autofocus>
       </div>
-      <div class="field">
+      <div class="field" id="dateField">
         <label for="addDate">Fecha límite</label>
-        <input type="datetime-local" id="addDate">
-      </div>
-      <div class="field">
-        <label for="addOffset">Recordatorio</label>
-        <select id="addOffset">
-          <option value="-1">Sin recordatorio</option>
-          <option value="0">Al vencer</option>
-          <option value="30">30 min antes</option>
-          <option value="60">1 hora antes</option>
-          <option value="120">2 horas antes</option>
-          <option value="360">6 horas antes</option>
-          <option value="720">12 horas antes</option>
-          <option value="1440" selected>1 día antes</option>
-          <option value="2880">2 días antes</option>
-          <option value="4320">3 días antes</option>
-          <option value="10080">1 semana antes</option>
-        </select>
+        <input type="date" id="addDate">
       </div>
       <div class="field">
         <label for="addRecur">Repetición</label>
         <select id="addRecur">
           <option value="">Sin repetición</option>
           <option value="daily">Diaria</option>
-          <option value="weekly">Semanal</option>
-          <option value="weekly-days">Semanal (días)</option>
+          <option value="weekly-days">Semanal</option>
           <option value="monthly">Mensual</option>
         </select>
       </div>
@@ -62,7 +45,7 @@
         <label for="addProject">Proyecto</label>
         <select id="addProject"></select>
       </div>
-      <div class="field wide day-picker" id="addDaysContainer" style="display:none">
+      <div class="field wide day-picker hidden" id="addDaysContainer">
         <label>Días</label>
         <div class="day-cbs">
           <label class="day-cb"><input type="checkbox" class="day-check" value="1">Lun</label>

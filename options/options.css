@@ -250,8 +250,12 @@ button {
   width: 100%;
 }
 
-.add-form input[type="datetime-local"] {
-  width: 210px;
+.add-form input[type="date"] {
+  width: 160px;
+}
+
+.hidden {
+  display: none !important;
 }
 
 .add-form button[type="submit"] {
@@ -952,8 +956,7 @@ button {
 
 /* ── Utility ── */
 
-input[type="date"],
-input[type="datetime-local"] {
+input[type="date"] {
   color-scheme: dark;
 }
 

@@ -115,7 +115,7 @@ function render() {
           ${daysLeft ? `<span class="tag days">${daysLeft}</span>` : ''}
           ${t.project ? `<span class="tag project">${escHtml(t.project)}</span>` : ''}
           ${t.recurrence === 'weekly-days' && t.recurrenceDays ? `<span class="tag days">${t.recurrenceDays.split(',').map(d => ({0:'Dom',1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb'})[d]).join(',')}</span>` : ''}
-          ${t.recurrence && t.recurrence !== 'weekly-days' ? '<span class="tag recurrence">↻</span>' : ''}
+          ${t.recurrence ? '<span class="tag recurrence">↻</span>' : ''}
         </span>
       </div>`;
     }
